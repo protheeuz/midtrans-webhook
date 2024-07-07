@@ -99,11 +99,11 @@ function sendWhatsAppNotification(orderId, phoneNumber, customerName, statusOrPa
     let message = '';
 
     if (statusOrPaymentUrl === 'settlement') {
-        message = `✅ Halo, ${customerName}, pembayaran untuk order ${orderId} berhasil. Terima kasih atas pembelian Anda.`;
+        message = `✅ Halo, ${customerName}, pembayaran untuk ${orderId} berhasil. Terima kasih atas pembelian Anda.`;
     } else if (statusOrPaymentUrl === 'pending') {
-        message = `⌛ Halo, ${customerName}, pembayaran untuk order ${orderId} sedang menunggu konfirmasi. Silakan selesaikan pembayaran Anda.`;
+        message = `⌛ Halo, ${customerName}, pembayaran untuk ${orderId} sedang menunggu konfirmasi. Silakan selesaikan pembayaran Anda.`;
     } else if (statusOrPaymentUrl === 'expire') {
-        message = `⚠️ Halo, ${customerName}, pembayaran untuk order ${orderId} telah kedaluwarsa. Silakan coba lagi.`;
+        message = `⚠️ Halo, ${customerName}, pembayaran untuk ${orderId} telah kedaluwarsa. Silakan coba lagi.`;
     } else {
         message = `📝 Halo, ${customerName}, silakan selesaikan pembayaran Anda dengan mengunjungi tautan berikut: ${statusOrPaymentUrl}`;
     }
