@@ -3,8 +3,8 @@ const bodyParser = require('body-parser');
 const axios = require('axios');
 const FormData = require('form-data');
 const crypto = require('crypto');
-const connectToDatabase = require('./mongodb');
 const mongoose = require('mongoose');
+const connectToDatabase = require('./mongodb');
 require('dotenv').config();
 
 const app = express();
