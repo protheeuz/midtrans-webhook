@@ -23,34 +23,88 @@ app.post('/webhook', (req, res) => {
     // Simpan log untuk debugging
     console.log('Received event:', JSON.stringify(event, null, 2));
 
-    // Lakukan validasi payload dan cek status pembayaran
-    if (event.transaction_status === 'settlement') {
-        // Pembayaran berhasil
-        const orderId = event.order_id;
-        const phoneNumber = event.customer_details.phone; // Ambil nomor telepon dari detail pelanggan
-        const customerName = event.customer_details.first_name; // Ambil nama pelanggan
-
-        console.log(`Preparing to send WhatsApp notification for order ${orderId} to ${phoneNumber}`);
-
-        // Kirim notifikasi WhatsApp
-        sendWhatsAppNotification(orderId, phoneNumber, customerName)
-            .then(response => {
-                console.log('WhatsApp notification sent:', response.data);
-                res.status(200).send('Notification sent');
-            })
-            .catch(error => {
-                console.error('Error sending WhatsApp notification:', error.response ? error.response.data : error.message);
-                res.status(500).send('Error sending notification');
-            });
-    } else {
-        console.log('Event received but not settlement:', event.transaction_status);
-        res.status(200).send('Event received');
+    switch (event.transaction_status) {
+        case 'settlement':
+            handleSettlement(event, res);
+            break;
+        case 'pending':
+            handlePending(event, res);
+            break;
+        case 'expire':
+            handleExpire(event, res);
+            break;
+        default:
+            console.log('Unhandled transaction status:', event.transaction_status);
+            res.status(200).send('Event received but not handled');
     }
 });
 
-function sendWhatsAppNotification(orderId, phoneNumber, customerName) {
+function handleSettlement(event, res) {
+    const orderId = event.order_id;
+    const phoneNumber = event.customer_details.phone; // Ambil nomor telepon dari detail pelanggan
+    const customerName = event.customer_details.first_name; // Ambil nama pelanggan
+
+    console.log(`Preparing to send WhatsApp notification for order ${orderId} to ${phoneNumber}`);
+
+    // Kirim notifikasi WhatsApp
+    sendWhatsAppNotification(orderId, phoneNumber, customerName, 'settlement')
+        .then(response => {
+            console.log('WhatsApp notification sent:', response.data);
+            res.status(200).send('Notification sent');
+        })
+        .catch(error => {
+            console.error('Error sending WhatsApp notification:', error.response ? error.response.data : error.message);
+            res.status(500).send('Error sending notification');
+        });
+}
+
+function handlePending(event, res) {
+    const orderId = event.order_id;
+    const phoneNumber = event.customer_details.phone;
+    const customerName = event.customer_details.first_name;
+
+    console.log(`Transaction pending for order ${orderId}`);
+
+    sendWhatsAppNotification(orderId, phoneNumber, customerName, 'pending')
+        .then(response => {
+            console.log('WhatsApp notification sent for pending transaction:', response.data);
+            res.status(200).send('Notification sent for pending transaction');
+        })
+        .catch(error => {
+            console.error('Error sending WhatsApp notification for pending transaction:', error.response ? error.response.data : error.message);
+            res.status(500).send('Error sending notification for pending transaction');
+        });
+}
+
+function handleExpire(event, res) {
+    const orderId = event.order_id;
+    const phoneNumber = event.customer_details.phone;
+    const customerName = event.customer_details.first_name;
+
+    console.log(`Transaction expired for order ${orderId}`);
+
+    sendWhatsAppNotification(orderId, phoneNumber, customerName, 'expire')
+        .then(response => {
+            console.log('WhatsApp notification sent for expired transaction:', response.data);
+            res.status(200).send('Notification sent for expired transaction');
+        })
+        .catch(error => {
+            console.error('Error sending WhatsApp notification for expired transaction:', error.response ? error.response.data : error.message);
+            res.status(500).send('Error sending notification for expired transaction');
+        });
+}
+
+function sendWhatsAppNotification(orderId, phoneNumber, customerName, status) {
     const apiUrl = 'https://wapisender.id/api/v5/message/text';
-    const message = `Halo, ${customerName}, pembayaran untuk order ${orderId} berhasil. Terima kasih atas pembelian Anda.`;
+    let message = '';
+
+    if (status === 'settlement') {
+        message = `✅ Halo, ${customerName}, pembayaran untuk order ${orderId} berhasil. Terima kasih atas pembelian Anda.`;
+    } else if (status === 'pending') {
+        message = `⌛ Halo, ${customerName}, pembayaran untuk order ${orderId} sedang menunggu konfirmasi. Silakan selesaikan pembayaran Anda.`;
+    } else if (status === 'expire') {
+        message = `⚠️ Halo, ${customerName}, pembayaran untuk order ${orderId} telah kedaluwarsa. Silakan coba lagi.`;
+    }
 
     const data = new FormData();
     data.append('api_key', WAPISENDER_API_KEY);
