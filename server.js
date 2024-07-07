@@ -175,6 +175,33 @@ app.post('/webhook', async (req, res) => {
     }
 });
 
+function sendWhatsAppNotification(orderId, phoneNumber, customerName, statusOrPaymentUrl) {
+    const apiUrl = 'https://wapisender.id/api/v5/message/text';
+    let message = '';
+
+    if (statusOrPaymentUrl === 'settlement') {
+        message = `✅ Halo, ${customerName}, pembayaran untuk order ${orderId} berhasil. Terima kasih atas pembelian Anda.`;
+    } else if (statusOrPaymentUrl === 'pending') {
+        message = `⌛ Halo, ${customerName}, pembayaran untuk order ${orderId} sedang menunggu konfirmasi. Silakan selesaikan pembayaran Anda.`;
+    } else if (statusOrPaymentUrl === 'expire') {
+        message = `⚠️ Halo, ${customerName}, pembayaran untuk order ${orderId} telah kedaluwarsa. Silakan coba lagi.`;
+    } else {
+        message = `📝 Halo, ${customerName}, silakan selesaikan pembayaran Anda dengan mengunjungi tautan berikut: ${statusOrPaymentUrl}`;
+    }
+
+    const data = new FormData();
+    data.append('api_key', WAPISENDER_API_KEY);
+    data.append('device_key', WAPISENDER_DEVICE_KEY);
+    data.append('destination', phoneNumber);
+    data.append('message', message);
+
+    console.log(`Sending WhatsApp notification to ${phoneNumber}: ${message}`);
+
+    return axios.post(apiUrl, data, {
+        headers: data.getHeaders()
+    });
+}
+
 app.get('/payment/finish', (req, res) => {
     res.send('Pembayaran berhasil. Terima kasih atas pembelian Anda!');
 });
