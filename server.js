@@ -23,7 +23,7 @@ app.set('views', path.join(__dirname, 'views'));
 
 const connectToDatabase = async () => {
     try {
-        await mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+        await mongoose.connect(process.env.MONGODB_URI);
         console.log('Connected to MongoDB');
     } catch (error) {
         console.error('MongoDB connection error:', error);
@@ -93,6 +93,21 @@ app.post('/create-payment-link', async (req, res) => {
         res.status(500).send('Error creating order');
     }
 });
+
+function sendWhatsAppNotification(orderId, phoneNumber, customerName, paymentUrl) {
+    const apiUrl = 'https://wapisender.id/api/v5/message/text';
+    const message = `📝 Halo, ${customerName}, silakan selesaikan pembayaran Anda dengan mengunjungi tautan berikut: ${paymentUrl}`;
+
+    const data = new FormData();
+    data.append('api_key', WAPISENDER_API_KEY);
+    data.append('device_key', WAPISENDER_DEVICE_KEY);
+    data.append('destination', phoneNumber);
+    data.append('message', message);
+
+    return axios.post(apiUrl, data, {
+        headers: data.getHeaders()
+    });
+}
 
 app.post('/webhook', async (req, res) => {
     const event = req.body;
@@ -174,33 +189,6 @@ app.post('/webhook', async (req, res) => {
         res.status(500).send('Error handling webhook');
     }
 });
-
-function sendWhatsAppNotification(orderId, phoneNumber, customerName, statusOrPaymentUrl) {
-    const apiUrl = 'https://wapisender.id/api/v5/message/text';
-    let message = '';
-
-    if (statusOrPaymentUrl === 'settlement') {
-        message = `✅ Halo, ${customerName}, pembayaran untuk order ${orderId} berhasil. Terima kasih atas pembelian Anda.`;
-    } else if (statusOrPaymentUrl === 'pending') {
-        message = `⌛ Halo, ${customerName}, pembayaran untuk order ${orderId} sedang menunggu konfirmasi. Silakan selesaikan pembayaran Anda.`;
-    } else if (statusOrPaymentUrl === 'expire') {
-        message = `⚠️ Halo, ${customerName}, pembayaran untuk order ${orderId} telah kedaluwarsa. Silakan coba lagi.`;
-    } else {
-        message = `📝 Halo, ${customerName}, silakan selesaikan pembayaran Anda dengan mengunjungi tautan berikut: ${statusOrPaymentUrl}`;
-    }
-
-    const data = new FormData();
-    data.append('api_key', WAPISENDER_API_KEY);
-    data.append('device_key', WAPISENDER_DEVICE_KEY);
-    data.append('destination', phoneNumber);
-    data.append('message', message);
-
-    console.log(`Sending WhatsApp notification to ${phoneNumber}: ${message}`);
-
-    return axios.post(apiUrl, data, {
-        headers: data.getHeaders()
-    });
-}
 
 app.get('/payment/finish', (req, res) => {
     res.send('Pembayaran berhasil. Terima kasih atas pembelian Anda!');
