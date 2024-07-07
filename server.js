@@ -3,6 +3,7 @@ const bodyParser = require('body-parser');
 const axios = require('axios');
 const FormData = require('form-data');
 const mongoose = require('mongoose');
+const path = require('path');
 const connectToDatabase = require('./mongodb');
 const verifyMidtrans = require('./middleware/verifyMidtrans');
 require('dotenv').config();
@@ -17,8 +18,9 @@ const MIDTRANS_CLIENT_KEY = process.env.MIDTRANS_CLIENT_KEY;
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use('/assets', express.static(path.join(__dirname, 'assets'))); // Menyajikan aset statis
 app.set('view engine', 'ejs');
-app.set('views', __dirname + '/views');
+app.set('views', path.join(__dirname, 'views'));
 
 connectToDatabase();
 
@@ -34,7 +36,6 @@ const orderSchema = new mongoose.Schema({
 
 const Order = mongoose.model('Order', orderSchema);
 
-// Route untuk memasukkan detail pembayaran
 app.get('/', (req, res) => {
     res.render('index');
 });
@@ -47,7 +48,6 @@ app.post('/create-payment-link', async (req, res) => {
         const newOrder = new Order({ orderId, phoneNumber, customerName, email, grossAmount });
         await newOrder.save();
 
-        // Buat URL pembayaran Midtrans
         const response = await axios.post('https://app.sandbox.midtrans.com/snap/v1/transactions', {
             transaction_details: {
                 order_id: orderId,
@@ -67,11 +67,9 @@ app.post('/create-payment-link', async (req, res) => {
 
         const paymentUrl = response.data.redirect_url;
 
-        // Simpan URL pembayaran ke database
         newOrder.paymentUrl = paymentUrl;
         await newOrder.save();
 
-        // Kirim URL pembayaran melalui WhatsApp
         sendWhatsAppNotification(orderId, phoneNumber, customerName, paymentUrl)
             .then(response => {
                 console.log('WhatsApp notification sent:', response.data);
@@ -87,11 +85,9 @@ app.post('/create-payment-link', async (req, res) => {
     }
 });
 
-// Endpoint untuk menerima notifikasi dari Midtrans dengan middleware verifikasi
 app.post('/webhook', verifyMidtrans, async (req, res) => {
     const event = req.body;
 
-    // Simpan log untuk debugging
     console.log('Received event:', JSON.stringify(event, null, 2));
 
     switch (event.transaction_status) {
@@ -128,7 +124,6 @@ async function handleSettlement(event, res) {
 
         console.log(`Preparing to send WhatsApp notification for order ${orderId} to ${phoneNumber}`);
 
-        // Kirim notifikasi WhatsApp
         sendWhatsAppNotification(orderId, phoneNumber, customerName, 'settlement')
             .then(response => {
                 console.log('WhatsApp notification sent:', response.data);
@@ -235,18 +230,14 @@ function sendWhatsAppNotification(orderId, phoneNumber, customerName, statusOrPa
     });
 }
 
-// Endpoint untuk menerima webhook dari Wapisender (opsional jika Anda ingin menangani pesan masuk)
 app.post('/wapisender-webhook', (req, res) => {
     const event = req.body;
 
-    // Simpan log untuk debugging
     console.log('Received Wapisender webhook:', JSON.stringify(event, null, 2));
 
-    // Verifikasi hash untuk memastikan webhook berasal dari Wapisender
     const hash = crypto.createHash('md5').update(`${event.device_key}#${WAPISENDER_API_KEY}#${event.message_id}`).digest('hex');
     if (hash === event.hash) {
         console.log('Hash verified successfully.');
-        // Tangani logika setelah pesan dikirim
     } else {
         console.log('Hash verification failed.');
     }
@@ -254,17 +245,14 @@ app.post('/wapisender-webhook', (req, res) => {
     res.status(200).send('Webhook received');
 });
 
-// Endpoint untuk redirect setelah pembayaran berhasil
 app.get('/payment/finish', (req, res) => {
     res.send('Pembayaran berhasil. Terima kasih atas pembelian Anda!');
 });
 
-// Endpoint untuk redirect setelah pembayaran tidak selesai
 app.get('/payment/unfinish', (req, res) => {
     res.send('Pembayaran belum selesai. Silakan selesaikan pembayaran Anda.');
 });
 
-// Endpoint untuk redirect setelah pembayaran error
 app.get('/payment/error', (req, res) => {
     res.send('Terjadi kesalahan pada pembayaran. Silakan coba lagi.');
 });
