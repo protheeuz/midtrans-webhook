@@ -27,17 +27,19 @@ const orderSchema = new mongoose.Schema({
     phoneNumber: String,
     customerName: String,
     email: String,
-    grossAmount: Number
+    grossAmount: Number,
+    paymentUrl: String,
+    paymentStatus: { type: String, default: 'pending' }
 });
 
 const Order = mongoose.model('Order', orderSchema);
 
-// Route untuk membuat pesanan dan menyimpan nomor telepon
+// Route untuk memasukkan detail pembayaran
 app.get('/', (req, res) => {
     res.render('index');
 });
 
-app.post('/create-order', async (req, res) => {
+app.post('/create-payment-link', async (req, res) => {
     const { customerName, phoneNumber, email, grossAmount } = req.body;
     const orderId = 'order-' + new Date().getTime();
 
@@ -64,7 +66,21 @@ app.post('/create-order', async (req, res) => {
         });
 
         const paymentUrl = response.data.redirect_url;
-        res.render('payment', { paymentUrl });
+
+        // Simpan URL pembayaran ke database
+        newOrder.paymentUrl = paymentUrl;
+        await newOrder.save();
+
+        // Kirim URL pembayaran melalui WhatsApp
+        sendWhatsAppNotification(orderId, phoneNumber, customerName, paymentUrl)
+            .then(response => {
+                console.log('WhatsApp notification sent:', response.data);
+                res.status(200).send('Order created and notification sent');
+            })
+            .catch(error => {
+                console.error('Error sending WhatsApp notification:', error.response ? error.response.data : error.message);
+                res.status(500).send('Error sending notification');
+            });
     } catch (error) {
         console.error('Error creating order:', error);
         res.status(500).send('Error creating order');
@@ -79,6 +95,7 @@ app.post('/webhook', verifyMidtrans, async (req, res) => {
     console.log('Received event:', JSON.stringify(event, null, 2));
 
     switch (event.transaction_status) {
+        case 'capture':
         case 'settlement':
             handleSettlement(event, res);
             break;
@@ -102,6 +119,9 @@ async function handleSettlement(event, res) {
             console.error('Order not found for orderId', orderId);
             return res.status(404).send('Order not found');
         }
+
+        order.paymentStatus = 'settlement';
+        await order.save();
 
         const phoneNumber = order.phoneNumber;
         const customerName = order.customerName || 'Pelanggan';
@@ -133,6 +153,9 @@ async function handlePending(event, res) {
             return res.status(404).send('Order not found');
         }
 
+        order.paymentStatus = 'pending';
+        await order.save();
+
         const phoneNumber = order.phoneNumber;
         const customerName = order.customerName || 'Pelanggan';
 
@@ -162,6 +185,9 @@ async function handleExpire(event, res) {
             return res.status(404).send('Order not found');
         }
 
+        order.paymentStatus = 'expire';
+        await order.save();
+
         const phoneNumber = order.phoneNumber;
         const customerName = order.customerName || 'Pelanggan';
 
@@ -182,16 +208,18 @@ async function handleExpire(event, res) {
     }
 }
 
-function sendWhatsAppNotification(orderId, phoneNumber, customerName, status) {
+function sendWhatsAppNotification(orderId, phoneNumber, customerName, statusOrPaymentUrl) {
     const apiUrl = 'https://wapisender.id/api/v5/message/text';
     let message = '';
 
-    if (status === 'settlement') {
+    if (statusOrPaymentUrl === 'settlement') {
         message = `✅ Halo, ${customerName}, pembayaran untuk order ${orderId} berhasil. Terima kasih atas pembelian Anda.`;
-    } else if (status === 'pending') {
+    } else if (statusOrPaymentUrl === 'pending') {
         message = `⌛ Halo, ${customerName}, pembayaran untuk order ${orderId} sedang menunggu konfirmasi. Silakan selesaikan pembayaran Anda.`;
-    } else if (status === 'expire') {
+    } else if (statusOrPaymentUrl === 'expire') {
         message = `⚠️ Halo, ${customerName}, pembayaran untuk order ${orderId} telah kedaluwarsa. Silakan coba lagi.`;
+    } else {
+        message = `📝 Halo, ${customerName}, silakan selesaikan pembayaran Anda dengan mengunjungi tautan berikut: ${statusOrPaymentUrl}`;
     }
 
     const data = new FormData();

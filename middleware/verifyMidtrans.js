@@ -4,7 +4,7 @@ require('dotenv').config();
 const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY;
 
 const verifyMidtrans = (req, res, next) => {
-    const signatureKey = req.headers['x-callback-signature'] || req.body.signature_key;
+    const signatureKey = req.body.signature_key;
     const orderId = req.body.order_id;
     const statusCode = req.body.status_code;
     const grossAmount = req.body.gross_amount;
