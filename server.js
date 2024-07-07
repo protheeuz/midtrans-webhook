@@ -94,9 +94,19 @@ app.post('/create-payment-link', async (req, res) => {
     }
 });
 
-function sendWhatsAppNotification(orderId, phoneNumber, customerName, paymentUrl) {
+function sendWhatsAppNotification(orderId, phoneNumber, customerName, statusOrPaymentUrl) {
     const apiUrl = 'https://wapisender.id/api/v5/message/text';
-    const message = `📝 Halo, ${customerName}, silakan selesaikan pembayaran Anda dengan mengunjungi tautan berikut: ${paymentUrl}`;
+    let message = '';
+
+    if (statusOrPaymentUrl === 'settlement') {
+        message = `✅ Halo, ${customerName}, pembayaran untuk order ${orderId} berhasil. Terima kasih atas pembelian Anda.`;
+    } else if (statusOrPaymentUrl === 'pending') {
+        message = `⌛ Halo, ${customerName}, pembayaran untuk order ${orderId} sedang menunggu konfirmasi. Silakan selesaikan pembayaran Anda.`;
+    } else if (statusOrPaymentUrl === 'expire') {
+        message = `⚠️ Halo, ${customerName}, pembayaran untuk order ${orderId} telah kedaluwarsa. Silakan coba lagi.`;
+    } else {
+        message = `📝 Halo, ${customerName}, silakan selesaikan pembayaran Anda dengan mengunjungi tautan berikut: ${statusOrPaymentUrl}`;
+    }
 
     const data = new FormData();
     data.append('api_key', WAPISENDER_API_KEY);
@@ -104,7 +114,7 @@ function sendWhatsAppNotification(orderId, phoneNumber, customerName, paymentUrl
     data.append('destination', phoneNumber);
     data.append('message', message);
 
-    console.log(`Sending WhatsApp notification to ${phoneNumber}: ${message}`); // Logging tambahan
+    console.log(`Sending WhatsApp notification to ${phoneNumber}: ${message}`);
 
     return axios.post(apiUrl, data, {
         headers: data.getHeaders()
@@ -114,7 +124,7 @@ function sendWhatsAppNotification(orderId, phoneNumber, customerName, paymentUrl
 app.post('/webhook', async (req, res) => {
     const event = req.body;
 
-    console.log('Received event:', JSON.stringify(event, null, 2)); // Logging tambahan
+    console.log('Received event:', JSON.stringify(event, null, 2));
 
     const orderId = event.order_id;
     try {
@@ -124,38 +134,8 @@ app.post('/webhook', async (req, res) => {
             return res.status(404).send('Order not found');
         }
 
-        let statusResponse;
-        try {
-            const apiClient = new midtransClient.Snap({
-                isProduction: false,
-                serverKey: MIDTRANS_SERVER_KEY,
-                clientKey: MIDTRANS_CLIENT_KEY
-            });
-            statusResponse = await apiClient.transaction.notification(event);
-        } catch (err) {
-            console.error('Error getting transaction status:', err);
-            return res.status(500).send('Error getting transaction status');
-        }
-
-        const transactionStatus = statusResponse.transaction_status;
-        const fraudStatus = statusResponse.fraud_status;
-
-        if (transactionStatus === 'capture') {
-            if (fraudStatus === 'accept') {
-                order.paymentStatus = 'success';
-                await order.save();
-                sendWhatsAppNotification(orderId, order.phoneNumber, order.customerName, 'settlement')
-                    .then(response => {
-                        console.log('WhatsApp notification sent:', response.data);
-                        res.status(200).send('Notification sent');
-                    })
-                    .catch(error => {
-                        console.error('Error sending WhatsApp notification:', error.response ? error.response.data : error.message);
-                        res.status(500).send('Error sending notification');
-                    });
-            }
-        } else if (transactionStatus === 'settlement') {
-            order.paymentStatus = 'success';
+        if (event.transaction_status === 'capture' || event.transaction_status === 'settlement') {
+            order.paymentStatus = 'settlement';
             await order.save();
             sendWhatsAppNotification(orderId, order.phoneNumber, order.customerName, 'settlement')
                 .then(response => {
@@ -166,12 +146,20 @@ app.post('/webhook', async (req, res) => {
                     console.error('Error sending WhatsApp notification:', error.response ? error.response.data : error.message);
                     res.status(500).send('Error sending notification');
                 });
-        } else if (transactionStatus === 'pending') {
+        } else if (event.transaction_status === 'pending') {
             order.paymentStatus = 'pending';
             await order.save();
-            res.status(200).send('Pending event received');
-        } else if (transactionStatus === 'cancel' || transactionStatus === 'deny' || transactionStatus === 'expire') {
-            order.paymentStatus = 'failure';
+            sendWhatsAppNotification(orderId, order.phoneNumber, order.customerName, 'pending')
+                .then(response => {
+                    console.log('WhatsApp notification sent:', response.data);
+                    res.status(200).send('Notification sent');
+                })
+                .catch(error => {
+                    console.error('Error sending WhatsApp notification:', error.response ? error.response.data : error.message);
+                    res.status(500).send('Error sending notification');
+                });
+        } else if (event.transaction_status === 'expire') {
+            order.paymentStatus = 'expire';
             await order.save();
             sendWhatsAppNotification(orderId, order.phoneNumber, order.customerName, 'expire')
                 .then(response => {
@@ -183,7 +171,7 @@ app.post('/webhook', async (req, res) => {
                     res.status(500).send('Error sending notification');
                 });
         } else {
-            console.log('Unhandled transaction status:', transactionStatus);
+            console.log('Unhandled transaction status:', event.transaction_status);
             res.status(200).send('Event received but not handled');
         }
     } catch (error) {
