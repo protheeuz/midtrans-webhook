@@ -30,6 +30,8 @@ app.post('/webhook', (req, res) => {
         const phoneNumber = event.customer_details.phone; // Ambil nomor telepon dari detail pelanggan
         const customerName = event.customer_details.first_name; // Ambil nama pelanggan
 
+        console.log(`Preparing to send WhatsApp notification for order ${orderId} to ${phoneNumber}`);
+
         // Kirim notifikasi WhatsApp
         sendWhatsAppNotification(orderId, phoneNumber, customerName)
             .then(response => {
@@ -55,6 +57,8 @@ function sendWhatsAppNotification(orderId, phoneNumber, customerName) {
     data.append('device_key', WAPISENDER_DEVICE_KEY);
     data.append('destination', phoneNumber);
     data.append('message', message);
+
+    console.log(`Sending WhatsApp notification to ${phoneNumber}: ${message}`);
 
     return axios.post(apiUrl, data, {
         headers: data.getHeaders()
