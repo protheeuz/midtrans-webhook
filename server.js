@@ -3,21 +3,75 @@ const bodyParser = require('body-parser');
 const axios = require('axios');
 const FormData = require('form-data');
 const crypto = require('crypto');
+const connectToDatabase = require('./mongodb');
+const mongoose = require('mongoose');
 require('dotenv').config();
 
 const app = express();
-
 const PORT = process.env.PORT || 3000;
 
-// Menggunakan variabel lingkungan
 const WAPISENDER_API_KEY = process.env.WAPISENDER_API_KEY;
 const WAPISENDER_DEVICE_KEY = process.env.WAPISENDER_DEVICE_KEY;
+const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY;
+const MIDTRANS_CLIENT_KEY = process.env.MIDTRANS_CLIENT_KEY;
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+app.set('view engine', 'ejs');
+
+connectToDatabase();
+
+const orderSchema = new mongoose.Schema({
+    orderId: String,
+    phoneNumber: String,
+    customerName: String,
+    email: String,
+    grossAmount: Number
+});
+
+const Order = mongoose.model('Order', orderSchema);
+
+// Route untuk membuat pesanan dan menyimpan nomor telepon
+app.get('/', (req, res) => {
+    res.render('index');
+});
+
+app.post('/create-order', async (req, res) => {
+    const { customerName, phoneNumber, email, grossAmount } = req.body;
+    const orderId = 'order-' + new Date().getTime();
+
+    try {
+        const newOrder = new Order({ orderId, phoneNumber, customerName, email, grossAmount });
+        await newOrder.save();
+
+        // Buat URL pembayaran Midtrans
+        const response = await axios.post('https://app.sandbox.midtrans.com/snap/v1/transactions', {
+            transaction_details: {
+                order_id: orderId,
+                gross_amount: grossAmount
+            },
+            customer_details: {
+                first_name: customerName,
+                email: email,
+                phone: phoneNumber
+            }
+        }, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Basic ' + Buffer.from(MIDTRANS_SERVER_KEY + ':').toString('base64')
+            }
+        });
+
+        const paymentUrl = response.data.redirect_url;
+        res.render('payment', { paymentUrl });
+    } catch (error) {
+        console.error('Error creating order:', error);
+        res.status(500).send('Error creating order');
+    }
+});
 
 // Endpoint untuk menerima notifikasi dari Midtrans
-app.post('/webhook', (req, res) => {
+app.post('/webhook', async (req, res) => {
     const event = req.body;
 
     // Simpan log untuk debugging
@@ -39,59 +93,92 @@ app.post('/webhook', (req, res) => {
     }
 });
 
-function handleSettlement(event, res) {
+async function handleSettlement(event, res) {
     const orderId = event.order_id;
-    const phoneNumber = event.customer_details.phone; // Ambil nomor telepon dari detail pelanggan
-    const customerName = event.customer_details.first_name; // Ambil nama pelanggan
+    try {
+        const order = await Order.findOne({ orderId });
+        if (!order) {
+            console.error('Order not found for orderId', orderId);
+            return res.status(404).send('Order not found');
+        }
 
-    console.log(`Preparing to send WhatsApp notification for order ${orderId} to ${phoneNumber}`);
+        const phoneNumber = order.phoneNumber;
+        const customerName = order.customerName || 'Pelanggan';
 
-    // Kirim notifikasi WhatsApp
-    sendWhatsAppNotification(orderId, phoneNumber, customerName, 'settlement')
-        .then(response => {
-            console.log('WhatsApp notification sent:', response.data);
-            res.status(200).send('Notification sent');
-        })
-        .catch(error => {
-            console.error('Error sending WhatsApp notification:', error.response ? error.response.data : error.message);
-            res.status(500).send('Error sending notification');
-        });
+        console.log(`Preparing to send WhatsApp notification for order ${orderId} to ${phoneNumber}`);
+
+        // Kirim notifikasi WhatsApp
+        sendWhatsAppNotification(orderId, phoneNumber, customerName, 'settlement')
+            .then(response => {
+                console.log('WhatsApp notification sent:', response.data);
+                res.status(200).send('Notification sent');
+            })
+            .catch(error => {
+                console.error('Error sending WhatsApp notification:', error.response ? error.response.data : error.message);
+                res.status(500).send('Error sending notification');
+            });
+    } catch (error) {
+        console.error('Error handling settlement:', error);
+        res.status(500).send('Error handling settlement');
+    }
 }
 
-function handlePending(event, res) {
+async function handlePending(event, res) {
     const orderId = event.order_id;
-    const phoneNumber = event.customer_details.phone;
-    const customerName = event.customer_details.first_name;
+    try {
+        const order = await Order.findOne({ orderId });
+        if (!order) {
+            console.error('Order not found for orderId', orderId);
+            return res.status(404).send('Order not found');
+        }
 
-    console.log(`Transaction pending for order ${orderId}`);
+        const phoneNumber = order.phoneNumber;
+        const customerName = order.customerName || 'Pelanggan';
 
-    sendWhatsAppNotification(orderId, phoneNumber, customerName, 'pending')
-        .then(response => {
-            console.log('WhatsApp notification sent for pending transaction:', response.data);
-            res.status(200).send('Notification sent for pending transaction');
-        })
-        .catch(error => {
-            console.error('Error sending WhatsApp notification for pending transaction:', error.response ? error.response.data : error.message);
-            res.status(500).send('Error sending notification for pending transaction');
-        });
+        console.log(`Transaction pending for order ${orderId}`);
+
+        sendWhatsAppNotification(orderId, phoneNumber, customerName, 'pending')
+            .then(response => {
+                console.log('WhatsApp notification sent for pending transaction:', response.data);
+                res.status(200).send('Notification sent for pending transaction');
+            })
+            .catch(error => {
+                console.error('Error sending WhatsApp notification for pending transaction:', error.response ? error.response.data : error.message);
+                res.status(500).send('Error sending notification for pending transaction');
+            });
+    } catch (error) {
+        console.error('Error handling pending:', error);
+        res.status(500).send('Error handling pending');
+    }
 }
 
-function handleExpire(event, res) {
+async function handleExpire(event, res) {
     const orderId = event.order_id;
-    const phoneNumber = event.customer_details.phone;
-    const customerName = event.customer_details.first_name;
+    try {
+        const order = await Order.findOne({ orderId });
+        if (!order) {
+            console.error('Order not found for orderId', orderId);
+            return res.status(404).send('Order not found');
+        }
 
-    console.log(`Transaction expired for order ${orderId}`);
+        const phoneNumber = order.phoneNumber;
+        const customerName = order.customerName || 'Pelanggan';
 
-    sendWhatsAppNotification(orderId, phoneNumber, customerName, 'expire')
-        .then(response => {
-            console.log('WhatsApp notification sent for expired transaction:', response.data);
-            res.status(200).send('Notification sent for expired transaction');
-        })
-        .catch(error => {
-            console.error('Error sending WhatsApp notification for expired transaction:', error.response ? error.response.data : error.message);
-            res.status(500).send('Error sending notification for expired transaction');
-        });
+        console.log(`Transaction expired for order ${orderId}`);
+
+        sendWhatsAppNotification(orderId, phoneNumber, customerName, 'expire')
+            .then(response => {
+                console.log('WhatsApp notification sent for expired transaction:', response.data);
+                res.status(200).send('Notification sent for expired transaction');
+            })
+            .catch(error => {
+                console.error('Error sending WhatsApp notification for expired transaction:', error.response ? error.response.data : error.message);
+                res.status(500).send('Error sending notification for expired transaction');
+            });
+    } catch (error) {
+        console.error('Error handling expire:', error);
+        res.status(500).send('Error handling expire');
+    }
 }
 
 function sendWhatsAppNotification(orderId, phoneNumber, customerName, status) {
@@ -136,6 +223,21 @@ app.post('/wapisender-webhook', (req, res) => {
     }
 
     res.status(200).send('Webhook received');
+});
+
+// Endpoint untuk redirect setelah pembayaran berhasil
+app.get('/payment/finish', (req, res) => {
+    res.send('Pembayaran berhasil. Terima kasih atas pembelian Anda!');
+});
+
+// Endpoint untuk redirect setelah pembayaran tidak selesai
+app.get('/payment/unfinish', (req, res) => {
+    res.send('Pembayaran belum selesai. Silakan selesaikan pembayaran Anda.');
+});
+
+// Endpoint untuk redirect setelah pembayaran error
+app.get('/payment/error', (req, res) => {
+    res.send('Terjadi kesalahan pada pembayaran. Silakan coba lagi.');
 });
 
 app.listen(PORT, () => {
