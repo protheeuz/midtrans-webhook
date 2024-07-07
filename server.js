@@ -2,9 +2,9 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const FormData = require('form-data');
-const crypto = require('crypto');
 const mongoose = require('mongoose');
 const connectToDatabase = require('./mongodb');
+const verifyMidtrans = require('./middleware/verifyMidtrans');
 require('dotenv').config();
 
 const app = express();
@@ -18,7 +18,7 @@ const MIDTRANS_CLIENT_KEY = process.env.MIDTRANS_CLIENT_KEY;
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.set('view engine', 'ejs');
-app.set('views', __dirname + '/views'); // Pastikan path ini benar
+app.set('views', __dirname + '/views');
 
 connectToDatabase();
 
@@ -71,8 +71,8 @@ app.post('/create-order', async (req, res) => {
     }
 });
 
-// Endpoint untuk menerima notifikasi dari Midtrans
-app.post('/webhook', async (req, res) => {
+// Endpoint untuk menerima notifikasi dari Midtrans dengan middleware verifikasi
+app.post('/webhook', verifyMidtrans, async (req, res) => {
     const event = req.body;
 
     // Simpan log untuk debugging
