@@ -104,6 +104,8 @@ function sendWhatsAppNotification(orderId, phoneNumber, customerName, paymentUrl
     data.append('destination', phoneNumber);
     data.append('message', message);
 
+    console.log(`Sending WhatsApp notification to ${phoneNumber}: ${message}`); // Logging tambahan
+
     return axios.post(apiUrl, data, {
         headers: data.getHeaders()
     });
@@ -112,7 +114,7 @@ function sendWhatsAppNotification(orderId, phoneNumber, customerName, paymentUrl
 app.post('/webhook', async (req, res) => {
     const event = req.body;
 
-    console.log('Received event:', JSON.stringify(event, null, 2));
+    console.log('Received event:', JSON.stringify(event, null, 2)); // Logging tambahan
 
     const orderId = event.order_id;
     try {
