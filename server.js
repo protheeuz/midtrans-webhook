@@ -21,7 +21,7 @@ app.post('/webhook', (req, res) => {
     const event = req.body;
 
     // Simpan log untuk debugging
-    console.log('Received event:', event);
+    console.log('Received event:', JSON.stringify(event, null, 2));
 
     // Lakukan validasi payload dan cek status pembayaran
     if (event.transaction_status === 'settlement') {
@@ -61,12 +61,12 @@ function sendWhatsAppNotification(orderId, phoneNumber, customerName) {
     });
 }
 
-// Endpoint untuk menerima webhook dari Wapisender
+// Endpoint untuk menerima webhook dari Wapisender (opsional jika Anda ingin menangani pesan masuk)
 app.post('/wapisender-webhook', (req, res) => {
     const event = req.body;
 
     // Simpan log untuk debugging
-    console.log('Received Wapisender webhook:', event);
+    console.log('Received Wapisender webhook:', JSON.stringify(event, null, 2));
 
     // Verifikasi hash untuk memastikan webhook berasal dari Wapisender
     const hash = crypto.createHash('md5').update(`${event.device_key}#${WAPISENDER_API_KEY}#${event.message_id}`).digest('hex');
