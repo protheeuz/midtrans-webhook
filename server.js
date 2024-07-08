@@ -15,21 +15,16 @@ const WAPISENDER_DEVICE_KEY = process.env.WAPISENDER_DEVICE_KEY;
 const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY;
 const MIDTRANS_CLIENT_KEY = process.env.MIDTRANS_CLIENT_KEY;
 
+// Menggunakan file mongodb.js untuk koneksi ke MongoDB
+const connectToDatabase = require('./mongodb');
+
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-const connectToDatabase = async () => {
-    try {
-        await mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true });
-        console.log('Connected to MongoDB');
-    } catch (error) {
-        console.error('MongoDB connection error:', error);
-    }
-};
-
+// Memanggil fungsi untuk menghubungkan ke database
 connectToDatabase();
 
 const orderSchema = new mongoose.Schema({
