@@ -61,6 +61,8 @@ app.post('/create-payment-link', async (req, res) => {
     const { customerName, phoneNumber, email, grossAmount } = req.body;
     const orderId = 'order-' + new Date().getTime();
 
+    console.log('Received form data:', req.body); // Logging data yang diterima
+
     try {
         console.log('Creating new order...');
         const newOrder = new Order({ orderId, phoneNumber, customerName, email, grossAmount });
