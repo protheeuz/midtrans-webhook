@@ -1,6 +1,6 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const axios = require('axios');
+const fetch = require('node-fetch');
 const FormData = require('form-data');
 const mongoose = require('mongoose');
 const path = require('path');
@@ -133,19 +133,20 @@ function sendWhatsAppNotification(orderId, phoneNumber, customerName, statusOrPa
     console.log('API URL:', apiUrl);
     console.log('FormData:', data);
 
-    return axios.post(apiUrl, data, {
+    return fetch(apiUrl, {
+        method: 'POST',
+        body: data,
         headers: data.getHeaders()
     }).then(response => {
-        console.log('WhatsApp notification sent:', response.data);
-        return response.data;
-    }).catch(error => {
-        if (error.response) {
-            console.error('Error response data:', error.response.data);
-            console.error('Error response status:', error.response.status);
-            console.error('Error response headers:', error.response.headers);
-        } else {
-            console.error('Error message:', error.message);
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
         }
+        return response.json();
+    }).then(responseData => {
+        console.log('WhatsApp notification sent:', responseData);
+        return responseData;
+    }).catch(error => {
+        console.error('Error sending WhatsApp notification:', error);
         throw new Error('Error sending WhatsApp notification');
     });
 }
