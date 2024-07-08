@@ -21,6 +21,7 @@ app.use('/assets', express.static(path.join(__dirname, 'assets')));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
+// Koneksi ke MongoDB
 const connectToDatabase = async () => {
     try {
         await mongoose.connect(process.env.MONGODB_URI, {
@@ -50,13 +51,6 @@ const Order = mongoose.model('Order', orderSchema);
 const snap = new midtransClient.Snap({
     isProduction: false, // Ganti menjadi true jika Anda ingin menggunakan Production Environment
     serverKey: MIDTRANS_SERVER_KEY
-});
-
-app.use((req, res, next) => {
-    console.log(`Received ${req.method} request for ${req.url}`);
-    console.time(`Request time for ${req.url}`);
-    next();
-    console.timeEnd(`Request time for ${req.url}`);
 });
 
 app.get('/', (req, res) => {
@@ -112,6 +106,7 @@ app.post('/create-payment-link', async (req, res) => {
         res.status(500).send('Error creating order');
     }
 });
+
 function sendWhatsAppNotification(orderId, phoneNumber, customerName, statusOrPaymentUrl) {
     const apiUrl = 'https://wapisender.id/api/v5/message/text';
     let message = '';
@@ -135,8 +130,7 @@ function sendWhatsAppNotification(orderId, phoneNumber, customerName, statusOrPa
     console.log(`Sending WhatsApp notification to ${phoneNumber}: ${message}`);
 
     return axios.post(apiUrl, data, {
-        headers: data.getHeaders(),
-        timeout: 30000 // Menambahkan timeout 30 detik
+        headers: data.getHeaders()
     }).then(response => {
         console.log('WhatsApp notification sent:', response.data);
         return response.data;
@@ -224,6 +218,21 @@ app.get('/payment-status/:orderId', async (req, res) => {
     } catch (error) {
         console.error('Error retrieving order status:', error);
         res.status(500).send('Error retrieving order status');
+    }
+});
+
+// Endpoint untuk menguji koneksi MongoDB
+app.get('/test-mongodb', async (req, res) => {
+    try {
+        const connection = await mongoose.connection;
+        if (connection.readyState === 1) {
+            res.status(200).send('Connected to MongoDB');
+        } else {
+            res.status(500).send('Failed to connect to MongoDB');
+        }
+    } catch (error) {
+        console.error('Error connecting to MongoDB:', error);
+        res.status(500).send('Error connecting to MongoDB');
     }
 });
 
