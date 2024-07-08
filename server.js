@@ -157,9 +157,12 @@ app.post('/webhook', async (req, res) => {
             return res.status(404).send('Order not found');
         }
 
+        console.log('Processing event with status:', event.transaction_status);
+
         if (event.transaction_status === 'capture' || event.transaction_status === 'settlement') {
             order.paymentStatus = 'settlement';
             await order.save();
+            console.log('Order status updated to settlement.');
             sendWhatsAppNotification(orderId, order.phoneNumber, order.customerName, 'settlement')
                 .then(response => {
                     console.log('WhatsApp notification sent:', response.data);
@@ -176,10 +179,24 @@ app.post('/webhook', async (req, res) => {
         } else if (event.transaction_status === 'pending') {
             order.paymentStatus = 'pending';
             await order.save();
-            res.status(200).send('Pending event received');
+            console.log('Order status updated to pending.');
+            sendWhatsAppNotification(orderId, order.phoneNumber, order.customerName, 'pending')
+                .then(response => {
+                    console.log('WhatsApp notification sent for pending:', response.data);
+                    res.status(200).send('Pending notification sent');
+                })
+                .catch(error => {
+                    if (error.response) {
+                        console.error('Error response data:', error.response.data);
+                    } else {
+                        console.error('Error message:', error.message);
+                    }
+                    res.status(500).send('Error sending pending notification');
+                });
         } else if (event.transaction_status === 'expire') {
             order.paymentStatus = 'expire';
             await order.save();
+            console.log('Order status updated to expire.');
             sendWhatsAppNotification(orderId, order.phoneNumber, order.customerName, 'expire')
                 .then(response => {
                     console.log('WhatsApp notification sent:', response.data);
