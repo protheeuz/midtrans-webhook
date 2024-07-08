@@ -5,9 +5,11 @@ const FormData = require('form-data');
 const mongoose = require('mongoose');
 const path = require('path');
 const midtransClient = require('midtrans-client');
+const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
+app.use(cors());
 const PORT = process.env.PORT || 3000;
 
 const WAPISENDER_API_KEY = process.env.WAPISENDER_API_KEY;
