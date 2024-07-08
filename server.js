@@ -5,7 +5,7 @@ const FormData = require('form-data');
 const mongoose = require('mongoose');
 const path = require('path');
 const midtransClient = require('midtrans-client');
-const cors = require('cors');  // Tambahkan ini
+const cors = require('cors'); 
 require('dotenv').config();
 
 const app = express();
@@ -16,7 +16,7 @@ const WAPISENDER_DEVICE_KEY = process.env.WAPISENDER_DEVICE_KEY;
 const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY;
 const MIDTRANS_CLIENT_KEY = process.env.MIDTRANS_CLIENT_KEY;
 
-app.use(cors());  // Tambahkan ini
+app.use(cors());  
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
