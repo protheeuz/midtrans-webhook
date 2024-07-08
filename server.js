@@ -21,17 +21,22 @@ app.use('/assets', express.static(path.join(__dirname, 'assets')));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-mongoose.connect(process.env.MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 5000, // Time out after 5s instead of 30s
-    keepAlive: true,
-    keepAliveInitialDelay: 300000
-}).then(() => {
-    console.log('Connected to MongoDB');
-}).catch(error => {
-    console.error('MongoDB connection error:', error);
-});
+const connectToDatabase = async () => {
+    try {
+        await mongoose.connect(process.env.MONGODB_URI, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+            serverSelectionTimeoutMS: 5000, // Timeout setelah 5 detik
+            keepAlive: true,
+            keepAliveInitialDelay: 300000
+        });
+        console.log('Connected to MongoDB');
+    } catch (error) {
+        console.error('MongoDB connection error:', error);
+    }
+};
+
+connectToDatabase();
 
 const orderSchema = new mongoose.Schema({
     orderId: String,
@@ -48,6 +53,13 @@ const Order = mongoose.model('Order', orderSchema);
 const snap = new midtransClient.Snap({
     isProduction: false, // Ganti menjadi true jika Anda ingin menggunakan Production Environment
     serverKey: MIDTRANS_SERVER_KEY
+});
+
+app.use((req, res, next) => {
+    console.log(`Received ${req.method} request for ${req.url}`);
+    console.time(`Request time for ${req.url}`);
+    next();
+    console.timeEnd(`Request time for ${req.url}`);
 });
 
 app.get('/', (req, res) => {
