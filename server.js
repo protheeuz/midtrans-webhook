@@ -132,6 +132,8 @@ function sendWhatsAppNotification(orderId, phoneNumber, customerName, statusOrPa
     data.append('message', message);
 
     console.log(`Sending WhatsApp notification to ${phoneNumber}: ${message}`);
+    console.log('API URL:', apiUrl);
+    console.log('FormData:', data);
 
     return axios.post(apiUrl, data, {
         headers: data.getHeaders()
