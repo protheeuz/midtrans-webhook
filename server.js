@@ -1,9 +1,9 @@
 const express = require('express');
+const mongoose = require('mongoose');
+const path = require('path');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const FormData = require('form-data');
-const mongoose = require('mongoose');
-const path = require('path');
 const midtransClient = require('midtrans-client');
 require('dotenv').config();
 
@@ -15,17 +15,21 @@ const WAPISENDER_DEVICE_KEY = process.env.WAPISENDER_DEVICE_KEY;
 const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY;
 const MIDTRANS_CLIENT_KEY = process.env.MIDTRANS_CLIENT_KEY;
 
-// Menggunakan file mongodb.js untuk koneksi ke MongoDB
-const connectToDatabase = require('./mongodb');
-
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Memanggil fungsi untuk menghubungkan ke database
-connectToDatabase();
+mongoose.connect(process.env.MONGODB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 5000 // Time out after 5s instead of 30s
+}).then(() => {
+    console.log('Connected to MongoDB');
+}).catch(error => {
+    console.error('MongoDB connection error:', error);
+});
 
 const orderSchema = new mongoose.Schema({
     orderId: String,
@@ -126,7 +130,6 @@ function sendWhatsAppNotification(orderId, phoneNumber, customerName, statusOrPa
         } else {
             console.error('Error message:', error.message);
         }
-        console.error('Error config:', error.config);
         throw new Error('Error sending WhatsApp notification');
     });
 }
