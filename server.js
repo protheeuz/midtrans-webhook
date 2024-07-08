@@ -5,11 +5,10 @@ const FormData = require('form-data');
 const mongoose = require('mongoose');
 const path = require('path');
 const midtransClient = require('midtrans-client');
-const cors = require('cors');
+const cors = require('cors');  // Tambahkan ini
 require('dotenv').config();
 
 const app = express();
-app.use(cors());
 const PORT = process.env.PORT || 3000;
 
 const WAPISENDER_API_KEY = process.env.WAPISENDER_API_KEY;
@@ -17,6 +16,7 @@ const WAPISENDER_DEVICE_KEY = process.env.WAPISENDER_DEVICE_KEY;
 const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY;
 const MIDTRANS_CLIENT_KEY = process.env.MIDTRANS_CLIENT_KEY;
 
+app.use(cors());  // Tambahkan ini
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
@@ -62,8 +62,6 @@ app.get('/', (req, res) => {
 app.post('/create-payment-link', async (req, res) => {
     const { customerName, phoneNumber, email, grossAmount } = req.body;
     const orderId = 'order-' + new Date().getTime();
-
-    console.log('Received form data:', req.body); // Logging data yang diterima
 
     try {
         console.log('Creating new order...');
@@ -163,12 +161,9 @@ app.post('/webhook', async (req, res) => {
             return res.status(404).send('Order not found');
         }
 
-        console.log('Processing event with status:', event.transaction_status);
-
         if (event.transaction_status === 'capture' || event.transaction_status === 'settlement') {
             order.paymentStatus = 'settlement';
             await order.save();
-            console.log('Order status updated to settlement.');
             sendWhatsAppNotification(orderId, order.phoneNumber, order.customerName, 'settlement')
                 .then(response => {
                     console.log('WhatsApp notification sent:', response.data);
@@ -185,24 +180,10 @@ app.post('/webhook', async (req, res) => {
         } else if (event.transaction_status === 'pending') {
             order.paymentStatus = 'pending';
             await order.save();
-            console.log('Order status updated to pending.');
-            sendWhatsAppNotification(orderId, order.phoneNumber, order.customerName, 'pending')
-                .then(response => {
-                    console.log('WhatsApp notification sent for pending:', response.data);
-                    res.status(200).send('Pending notification sent');
-                })
-                .catch(error => {
-                    if (error.response) {
-                        console.error('Error response data:', error.response.data);
-                    } else {
-                        console.error('Error message:', error.message);
-                    }
-                    res.status(500).send('Error sending pending notification');
-                });
+            res.status(200).send('Pending event received');
         } else if (event.transaction_status === 'expire') {
             order.paymentStatus = 'expire';
             await order.save();
-            console.log('Order status updated to expire.');
             sendWhatsAppNotification(orderId, order.phoneNumber, order.customerName, 'expire')
                 .then(response => {
                     console.log('WhatsApp notification sent:', response.data);
