@@ -23,7 +23,7 @@ app.set('views', path.join(__dirname, 'views'));
 
 const connectToDatabase = async () => {
     try {
-        await mongoose.connect(process.env.MONGODB_URI);
+        await mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true });
         console.log('Connected to MongoDB');
     } catch (error) {
         console.error('MongoDB connection error:', error);
@@ -57,10 +57,6 @@ app.post('/create-payment-link', async (req, res) => {
     const { customerName, phoneNumber, email, grossAmount } = req.body;
     const orderId = 'order-' + new Date().getTime();
 
-    if (isNaN(grossAmount)) {
-        return res.status(400).send('Invalid gross amount');
-    }
-
     try {
         const newOrder = new Order({ orderId, phoneNumber, customerName, email, grossAmount });
         await newOrder.save();
@@ -68,7 +64,7 @@ app.post('/create-payment-link', async (req, res) => {
         let parameter = {
             transaction_details: {
                 order_id: orderId,
-                gross_amount: Number(grossAmount) // Pastikan grossAmount adalah angka
+                gross_amount: grossAmount
             },
             customer_details: {
                 first_name: customerName,
@@ -89,7 +85,11 @@ app.post('/create-payment-link', async (req, res) => {
                 res.status(200).send('Order created and notification sent');
             })
             .catch(error => {
-                console.error('Error sending WhatsApp notification:', error.response ? error.response.data : error.message);
+                if (error.response) {
+                    console.error('Error response data:', error.response.data);
+                } else {
+                    console.error('Error message:', error.message);
+                }
                 res.status(500).send('Error sending notification');
             });
     } catch (error) {
@@ -103,11 +103,11 @@ function sendWhatsAppNotification(orderId, phoneNumber, customerName, statusOrPa
     let message = '';
 
     if (statusOrPaymentUrl === 'settlement') {
-        message = `✅ Halo, ${customerName}, pembayaran untuk ${orderId} berhasil. Terima kasih atas pembelian Anda.`;
+        message = `✅ Halo, ${customerName}, pembayaran untuk order ${orderId} berhasil. Terima kasih atas pembelian Anda.`;
     } else if (statusOrPaymentUrl === 'pending') {
-        message = `⌛ Halo, ${customerName}, pembayaran untuk ${orderId} sedang menunggu konfirmasi. Silakan selesaikan pembayaran Anda.`;
+        message = `⌛ Halo, ${customerName}, pembayaran untuk order ${orderId} sedang menunggu konfirmasi. Silakan selesaikan pembayaran Anda.`;
     } else if (statusOrPaymentUrl === 'expire') {
-        message = `⚠️ Halo, ${customerName}, pembayaran untuk ${orderId} telah kedaluwarsa. Silakan coba lagi.`;
+        message = `⚠️ Halo, ${customerName}, pembayaran untuk order ${orderId} telah kedaluwarsa. Silakan coba lagi.`;
     } else {
         message = `📝 Halo, ${customerName}, silakan selesaikan pembayaran Anda dengan mengunjungi tautan berikut: ${statusOrPaymentUrl}`;
     }
@@ -122,6 +122,16 @@ function sendWhatsAppNotification(orderId, phoneNumber, customerName, statusOrPa
 
     return axios.post(apiUrl, data, {
         headers: data.getHeaders()
+    }).then(response => {
+        console.log('WhatsApp notification sent:', response.data);
+        return response.data;
+    }).catch(error => {
+        if (error.response) {
+            console.error('Error response data:', error.response.data);
+        } else {
+            console.error('Error message:', error.message);
+        }
+        throw new Error('Error sending WhatsApp notification');
     });
 }
 
@@ -130,8 +140,7 @@ app.post('/webhook', async (req, res) => {
 
     console.log('Received event:', JSON.stringify(event, null, 2));
 
-    const orderId = event.order_id.split('-')[0]; // Memastikan order_id sesuai dengan format yang disimpan
-
+    const orderId = event.order_id;
     try {
         const order = await Order.findOne({ orderId });
         if (!order) {
@@ -148,7 +157,11 @@ app.post('/webhook', async (req, res) => {
                     res.status(200).send('Notification sent');
                 })
                 .catch(error => {
-                    console.error('Error sending WhatsApp notification:', error.response ? error.response.data : error.message);
+                    if (error.response) {
+                        console.error('Error response data:', error.response.data);
+                    } else {
+                        console.error('Error message:', error.message);
+                    }
                     res.status(500).send('Error sending notification');
                 });
         } else if (event.transaction_status === 'pending') {
@@ -164,7 +177,11 @@ app.post('/webhook', async (req, res) => {
                     res.status(200).send('Notification sent');
                 })
                 .catch(error => {
-                    console.error('Error sending WhatsApp notification:', error.response ? error.response.data : error.message);
+                    if (error.response) {
+                        console.error('Error response data:', error.response.data);
+                    } else {
+                        console.error('Error message:', error.message);
+                    }
                     res.status(500).send('Error sending notification');
                 });
         } else {
@@ -177,16 +194,22 @@ app.post('/webhook', async (req, res) => {
     }
 });
 
-app.get('/payment/finish', (req, res) => {
-    res.send('Pembayaran berhasil. Terima kasih atas pembelian Anda!');
-});
-
-app.get('/payment/unfinish', (req, res) => {
-    res.send('Pembayaran belum selesai. Silakan selesaikan pembayaran Anda.');
-});
-
-app.get('/payment/error', (req, res) => {
-    res.send('Terjadi kesalahan pada pembayaran. Silakan coba lagi.');
+app.get('/payment-status/:orderId', async (req, res) => {
+    const { orderId } = req.params;
+    try {
+        const order = await Order.findOne({ orderId });
+        if (!order) {
+            return res.status(404).send('Order not found');
+        }
+        res.status(200).json({
+            orderId: order.orderId,
+            paymentStatus: order.paymentStatus,
+            paymentUrl: order.paymentUrl
+        });
+    } catch (error) {
+        console.error('Error retrieving order status:', error);
+        res.status(500).send('Error retrieving order status');
+    }
 });
 
 app.listen(PORT, () => {
