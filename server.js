@@ -126,6 +126,7 @@ function sendWhatsAppNotification(orderId, phoneNumber, customerName, statusOrPa
         } else {
             console.error('Error message:', error.message);
         }
+        console.error('Error config:', error.config);
         throw new Error('Error sending WhatsApp notification');
     });
 }
