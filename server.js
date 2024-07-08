@@ -141,6 +141,8 @@ function sendWhatsAppNotification(orderId, phoneNumber, customerName, statusOrPa
     }).catch(error => {
         if (error.response) {
             console.error('Error response data:', error.response.data);
+            console.error('Error response status:', error.response.status);
+            console.error('Error response headers:', error.response.headers);
         } else {
             console.error('Error message:', error.message);
         }
