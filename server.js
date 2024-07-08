@@ -1,9 +1,9 @@
 const express = require('express');
-const mongoose = require('mongoose');
-const path = require('path');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const FormData = require('form-data');
+const mongoose = require('mongoose');
+const path = require('path');
 const midtransClient = require('midtrans-client');
 require('dotenv').config();
 
@@ -57,8 +57,10 @@ app.post('/create-payment-link', async (req, res) => {
     const orderId = 'order-' + new Date().getTime();
 
     try {
+        console.log('Creating new order...');
         const newOrder = new Order({ orderId, phoneNumber, customerName, email, grossAmount });
         await newOrder.save();
+        console.log('New order saved.');
 
         let parameter = {
             transaction_details: {
@@ -72,11 +74,14 @@ app.post('/create-payment-link', async (req, res) => {
             }
         };
 
+        console.log('Creating transaction with Midtrans...');
         const transaction = await snap.createTransaction(parameter);
         const paymentUrl = transaction.redirect_url;
+        console.log('Transaction created. Payment URL:', paymentUrl);
 
         newOrder.paymentUrl = paymentUrl;
         await newOrder.save();
+        console.log('Order updated with payment URL.');
 
         sendWhatsAppNotification(orderId, phoneNumber, customerName, paymentUrl)
             .then(response => {
@@ -120,7 +125,8 @@ function sendWhatsAppNotification(orderId, phoneNumber, customerName, statusOrPa
     console.log(`Sending WhatsApp notification to ${phoneNumber}: ${message}`);
 
     return axios.post(apiUrl, data, {
-        headers: data.getHeaders()
+        headers: data.getHeaders(),
+        timeout: 30000 // Menambahkan timeout 30 detik
     }).then(response => {
         console.log('WhatsApp notification sent:', response.data);
         return response.data;
