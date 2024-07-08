@@ -112,7 +112,6 @@ app.post('/create-payment-link', async (req, res) => {
         res.status(500).send('Error creating order');
     }
 });
-
 function sendWhatsAppNotification(orderId, phoneNumber, customerName, statusOrPaymentUrl) {
     const apiUrl = 'https://wapisender.id/api/v5/message/text';
     let message = '';
