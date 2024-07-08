@@ -57,6 +57,10 @@ app.post('/create-payment-link', async (req, res) => {
     const { customerName, phoneNumber, email, grossAmount } = req.body;
     const orderId = 'order-' + new Date().getTime();
 
+    if (isNaN(grossAmount)) {
+        return res.status(400).send('Invalid gross amount');
+    }
+
     try {
         const newOrder = new Order({ orderId, phoneNumber, customerName, email, grossAmount });
         await newOrder.save();
@@ -64,7 +68,7 @@ app.post('/create-payment-link', async (req, res) => {
         let parameter = {
             transaction_details: {
                 order_id: orderId,
-                gross_amount: grossAmount
+                gross_amount: Number(grossAmount) // Pastikan grossAmount adalah angka
             },
             customer_details: {
                 first_name: customerName,
