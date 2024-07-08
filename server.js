@@ -126,7 +126,8 @@ app.post('/webhook', async (req, res) => {
 
     console.log('Received event:', JSON.stringify(event, null, 2));
 
-    const orderId = event.order_id;
+    const orderId = event.order_id.split('-')[0]; // Memastikan order_id sesuai dengan format yang disimpan
+
     try {
         const order = await Order.findOne({ orderId });
         if (!order) {
@@ -149,15 +150,7 @@ app.post('/webhook', async (req, res) => {
         } else if (event.transaction_status === 'pending') {
             order.paymentStatus = 'pending';
             await order.save();
-            sendWhatsAppNotification(orderId, order.phoneNumber, order.customerName, 'pending')
-                .then(response => {
-                    console.log('WhatsApp notification sent:', response.data);
-                    res.status(200).send('Notification sent');
-                })
-                .catch(error => {
-                    console.error('Error sending WhatsApp notification:', error.response ? error.response.data : error.message);
-                    res.status(500).send('Error sending notification');
-                });
+            res.status(200).send('Pending event received');
         } else if (event.transaction_status === 'expire') {
             order.paymentStatus = 'expire';
             await order.save();
