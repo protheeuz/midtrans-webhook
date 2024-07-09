@@ -1,11 +1,11 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const fetch = require('node-fetch');
+const axios = require('axios');
 const FormData = require('form-data');
 const mongoose = require('mongoose');
 const path = require('path');
 const midtransClient = require('midtrans-client');
-const cors = require('cors'); 
+const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
@@ -16,9 +16,9 @@ const WAPISENDER_DEVICE_KEY = process.env.WAPISENDER_DEVICE_KEY;
 const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY;
 const MIDTRANS_CLIENT_KEY = process.env.MIDTRANS_CLIENT_KEY;
 
-app.use(cors());  
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(cors());
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -97,6 +97,8 @@ app.post('/create-payment-link', async (req, res) => {
             })
             .catch(error => {
                 if (error.response) {
+                    console.error('Error response status:', error.response.status);
+                    console.error('Error response headers:', error.response.headers);
                     console.error('Error response data:', error.response.data);
                 } else {
                     console.error('Error message:', error.message);
@@ -130,23 +132,22 @@ function sendWhatsAppNotification(orderId, phoneNumber, customerName, statusOrPa
     data.append('message', message);
 
     console.log(`Sending WhatsApp notification to ${phoneNumber}: ${message}`);
-    console.log('API URL:', apiUrl);
+    console.log(`API URL: ${apiUrl}`);
     console.log('FormData:', data);
 
-    return fetch(apiUrl, {
-        method: 'POST',
-        body: data,
+    return axios.post(apiUrl, data, {
         headers: data.getHeaders()
     }).then(response => {
-        if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-        return response.json();
-    }).then(responseData => {
-        console.log('WhatsApp notification sent:', responseData);
-        return responseData;
+        console.log('WhatsApp notification sent:', response.data);
+        return response.data;
     }).catch(error => {
-        console.error('Error sending WhatsApp notification:', error);
+        if (error.response) {
+            console.error('Error response status:', error.response.status);
+            console.error('Error response headers:', error.response.headers);
+            console.error('Error response data:', error.response.data);
+        } else {
+            console.error('Error message:', error.message);
+        }
         throw new Error('Error sending WhatsApp notification');
     });
 }
